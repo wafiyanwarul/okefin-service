@@ -1,4 +1,4 @@
-echo "# Okefin-Service
+# Okefin-Service
 
 This is a backend service written in Go using the Fiber framework. The project structure follows clean architecture practices, separating concerns into handler, service, and repository layers.
 
