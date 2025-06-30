@@ -45,6 +45,7 @@ func main() {
 	tokoRepo := repository.NewTokoRepository(db)
 	produkRepo := repository.NewProdukRepository(db)
 	fotoRepo := repository.NewFotoProdukRepository(db)
+	transaksiRepo := repository.NewTransaksiRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
 
 	authService := service.NewAuthService(authRepo, service.NewTokoService(tokoRepo))
@@ -52,6 +53,7 @@ func main() {
 	alamatService := service.NewAlamatService(alamatRepo)
 	tokoService := service.NewTokoService(tokoRepo)
 	produkService := service.NewProdukService(produkRepo, tokoRepo, fotoRepo, categoryRepo)
+	transaksiService := service.NewTransaksiService(transaksiRepo, produkRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 
 	authHandler := handler.NewAuthHandler(authService)
@@ -59,6 +61,7 @@ func main() {
 	alamatHandler := handler.NewAlamatHandler(alamatService)
 	tokoHandler := handler.NewTokoHandler(tokoService)
 	produkHandler := handler.NewProdukHandler(produkService)
+	transaksiHandler := handler.NewTransaksiHandler(transaksiService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 
 	middleware.SetAuthRepo(authRepo)
@@ -115,6 +118,12 @@ func main() {
 	produk.Get("/:id", middleware.JWTProtected(), produkHandler.GetProdukByID)
 	produk.Put("/:id", middleware.JWTProtected(), produkHandler.UpdateProduk)
 	produk.Delete("/:id", middleware.JWTProtected(), produkHandler.DeleteProduk)
+
+	transaksi := app.Group("/transaksi")
+	transaksi.Post("/", middleware.JWTProtected(), transaksiHandler.CreateTransaksi)
+	transaksi.Get("/", middleware.JWTProtected(), transaksiHandler.GetAllTransaksiByUserID)
+	transaksi.Get("/:id", middleware.JWTProtected(), transaksiHandler.GetTransaksiByID)
+	transaksi.Put("/:id", middleware.JWTProtected(), transaksiHandler.UpdateTransaksi)
 
 	category := app.Group("/category")
 	category.Post("/", middleware.JWTProtected(), middleware.AdminOnly(), categoryHandler.CreateCategory)
