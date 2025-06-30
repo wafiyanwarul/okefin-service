@@ -8,7 +8,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/wafiydev/okefin-service/internal/dto"
+	"github.com/wafiydev/okefin-service/internal/repository"
+
 )
+
+var authRepo repository.AuthRepository // Declare as a package-level variable
+
+// SetAuthRepo sets the AuthRepository for middleware
+func SetAuthRepo(repo repository.AuthRepository) {
+	authRepo = repo
+}
 
 func JWTProtected() fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -36,7 +45,6 @@ func JWTProtected() fiber.Handler {
 
 		// Parse and validate token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Validate signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid signing method")
 			}
@@ -73,24 +81,66 @@ func JWTProtected() fiber.Handler {
 
 func AdminOnly() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// This middleware should be used after JWTProtected
-		// You can implement admin check logic here
-		// For now, we'll just pass through
+		if authRepo == nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(dto.APIResponse{
+				Status:  false,
+				Message: "Middleware not initialized",
+				Errors:  []string{"Auth repository not set"},
+				Data:    nil,
+			})
+		}
+
+		// Get userID from context (set by JWTProtected)
+		userID, err := GetUserIDFromContext(c)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(dto.APIResponse{
+				Status:  false,
+				Message: "Unauthorized",
+				Errors:  []string{"Invalid user ID"},
+				Data:    nil,
+			})
+		}
+
+		// Fetch user from repository to check IsAdmin
+		user, err := authRepo.GetUserByID(userID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(dto.APIResponse{
+				Status:  false,
+				Message: "Failed to fetch user",
+				Errors:  []string{err.Error()},
+				Data:    nil,
+			})
+		}
+
+		if !user.IsAdmin {
+			return c.Status(fiber.StatusForbidden).JSON(dto.APIResponse{
+				Status:  false,
+				Message: "Admin access required",
+				Errors:  []string{"Only admins can perform this action"},
+				Data:    nil,
+			})
+		}
+
 		return c.Next()
 	}
 }
 
 // Helper function to get user ID from context
 func GetUserIDFromContext(c *fiber.Ctx) (uint, error) {
-	userIDStr, ok := c.Locals("userID").(string)
-	if !ok {
-		return 0, fiber.NewError(fiber.StatusUnauthorized, "User ID not found in context")
-	}
+	raw := c.Locals("userID")
 
-	userID, err := strconv.ParseUint(userIDStr, 10, 32)
-	if err != nil {
-		return 0, fiber.NewError(fiber.StatusUnauthorized, "Invalid user ID")
+	switch val := raw.(type) {
+	case float64:
+		return uint(val), nil
+	case int:
+		return uint(val), nil
+	case string:
+		userID, err := strconv.ParseUint(val, 10, 32)
+		if err != nil {
+			return 0, fiber.NewError(fiber.StatusUnauthorized, "Invalid user ID string")
+		}
+		return uint(userID), nil
+	default:
+		return 0, fiber.NewError(fiber.StatusUnauthorized, "Invalid user ID type")
 	}
-
-	return uint(userID), nil
 }

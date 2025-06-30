@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -14,6 +13,7 @@ import (
 	"github.com/wafiydev/okefin-service/internal/models"
 	"github.com/wafiydev/okefin-service/internal/repository"
 	"golang.org/x/crypto/bcrypt"
+
 )
 
 type AuthService interface {
@@ -24,11 +24,12 @@ type AuthService interface {
 }
 
 type authService struct {
-	authRepo repository.AuthRepository
+	authRepo   repository.AuthRepository
+	tokoService TokoService // Inject TokoService
 }
 
-func NewAuthService(authRepo repository.AuthRepository) AuthService {
-	return &authService{authRepo: authRepo}
+func NewAuthService(authRepo repository.AuthRepository, tokoService TokoService) AuthService {
+	return &authService{authRepo: authRepo, tokoService: tokoService}
 }
 
 func (s *authService) Register(req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
@@ -70,16 +71,12 @@ func (s *authService) Register(req *dto.RegisterRequest) (*dto.RegisterResponse,
 		return nil, fmt.Errorf("failed to create user: %v", err)
 	}
 
-	// Create toko automatically
-	toko := &models.Toko{
-		IDUser:    user.ID,
-		NamaToko:  fmt.Sprintf("Toko %s", user.Nama),
-		UrlFoto:   "",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	// Create toko automatically using TokoService
+	tokoReq := &dto.CreateTokoRequest{
+		NamaToko: fmt.Sprintf("Toko %s", user.Nama),
+		UrlFoto:  "",
 	}
-
-	err = s.authRepo.CreateToko(toko)
+	tokoResponse, err := s.tokoService.CreateToko(user.ID, tokoReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create store: %v", err)
 	}
@@ -100,9 +97,9 @@ func (s *authService) Register(req *dto.RegisterRequest) (*dto.RegisterResponse,
 		IDKota:       kota,
 		IsAdmin:      user.IsAdmin,
 		Toko: &dto.TokoResponse{
-			ID:       toko.ID,
-			NamaToko: toko.NamaToko,
-			UrlFoto:  toko.UrlFoto,
+			ID:       tokoResponse.ID,
+			NamaToko: tokoResponse.NamaToko,
+			UrlFoto:  tokoResponse.UrlFoto,
 		},
 	}
 
@@ -124,7 +121,7 @@ func (s *authService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) {
 
 	// Generate JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":    strconv.Itoa(int(user.ID)),
+		"id":    int(user.ID),
 		"email": user.Email,
 		"exp":   time.Now().Add(time.Hour * 24).Unix(),
 	})
