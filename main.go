@@ -14,19 +14,15 @@ import (
 	"github.com/wafiydev/okefin-service/internal/models"
 	"github.com/wafiydev/okefin-service/internal/repository"
 	"github.com/wafiydev/okefin-service/internal/service"
-
 )
 
 func main() {
-	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
 
-	// Connect to database
 	config.ConnectDatabase()
 
-	// Auto migrate database
 	db := config.GetDB()
 	err := db.AutoMigrate(
 		&models.User{},
@@ -43,31 +39,30 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
-	// Initialize repositories
 	authRepo := repository.NewAuthRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	alamatRepo := repository.NewAlamatRepository(db)
 	tokoRepo := repository.NewTokoRepository(db)
+	produkRepo := repository.NewProdukRepository(db)
+	fotoRepo := repository.NewFotoProdukRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
 
-	// Initialize services
 	authService := service.NewAuthService(authRepo, service.NewTokoService(tokoRepo))
 	userService := service.NewUserService(userRepo, authService)
 	alamatService := service.NewAlamatService(alamatRepo)
 	tokoService := service.NewTokoService(tokoRepo)
+	produkService := service.NewProdukService(produkRepo, tokoRepo, fotoRepo, categoryRepo)
 	categoryService := service.NewCategoryService(categoryRepo)
 
-	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
 	alamatHandler := handler.NewAlamatHandler(alamatService)
 	tokoHandler := handler.NewTokoHandler(tokoService)
+	produkHandler := handler.NewProdukHandler(produkService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 
-	// Set authRepo for middleware
-	middleware.SetAuthRepo(authRepo) // Inject repository into middleware
+	middleware.SetAuthRepo(authRepo)
 
-	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
@@ -83,28 +78,23 @@ func main() {
 		},
 	})
 
-	// Middleware
 	app.Use(logger.New())
 	app.Use(cors.New())
 
-	// Routes
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Welcome to Okefin-Service!")
 	})
 
-	// Auth routes
 	auth := app.Group("/auth")
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
 
-	// User routes
 	user := app.Group("/user")
 	user.Get("/my", middleware.JWTProtected(), userHandler.GetMyProfile)
 	user.Put("/my", middleware.JWTProtected(), userHandler.UpdateMyProfile)
 	user.Get("/", middleware.JWTProtected(), userHandler.GetAllUsers)
 	user.Get("/:id", middleware.JWTProtected(), userHandler.GetUserByID)
 
-	// Alamat routes
 	alamat := app.Group("/alamat")
 	alamat.Post("/", middleware.JWTProtected(), alamatHandler.CreateAlamat)
 	alamat.Get("/my", middleware.JWTProtected(), alamatHandler.GetMyAlamat)
@@ -112,7 +102,6 @@ func main() {
 	alamat.Put("/:id", middleware.JWTProtected(), alamatHandler.UpdateAlamat)
 	alamat.Delete("/:id", middleware.JWTProtected(), alamatHandler.DeleteAlamat)
 
-	// Toko routes
 	toko := app.Group("/toko")
 	toko.Post("/", middleware.JWTProtected(), tokoHandler.CreateToko)
 	toko.Get("/my", middleware.JWTProtected(), tokoHandler.GetTokoByUserID)
@@ -120,7 +109,13 @@ func main() {
 	toko.Put("/:id", middleware.JWTProtected(), tokoHandler.UpdateToko)
 	toko.Delete("/:id", middleware.JWTProtected(), tokoHandler.DeleteToko)
 
-	// Category routes (admin-only)
+	produk := app.Group("/produk")
+	produk.Post("/", middleware.JWTProtected(), produkHandler.CreateProduk)
+	produk.Get("/toko", middleware.JWTProtected(), produkHandler.GetAllProdukByTokoID)
+	produk.Get("/:id", middleware.JWTProtected(), produkHandler.GetProdukByID)
+	produk.Put("/:id", middleware.JWTProtected(), produkHandler.UpdateProduk)
+	produk.Delete("/:id", middleware.JWTProtected(), produkHandler.DeleteProduk)
+
 	category := app.Group("/category")
 	category.Post("/", middleware.JWTProtected(), middleware.AdminOnly(), categoryHandler.CreateCategory)
 	category.Get("/", middleware.JWTProtected(), middleware.AdminOnly(), categoryHandler.GetAllCategories)
@@ -128,13 +123,9 @@ func main() {
 	category.Put("/:id", middleware.JWTProtected(), middleware.AdminOnly(), categoryHandler.UpdateCategory)
 	category.Delete("/:id", middleware.JWTProtected(), middleware.AdminOnly(), categoryHandler.DeleteCategory)
 
-	// File upload route
 	app.Post("/upload", middleware.JWTProtected(), userHandler.UploadFile)
-
-	// Serve static files
 	app.Static("/uploads", "./uploads")
 
-	// Get port from environment or default to 3000
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"

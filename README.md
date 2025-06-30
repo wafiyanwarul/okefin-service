@@ -1,6 +1,7 @@
 # Okefin-Service
 
-This is a backend service written in Go using the Fiber framework. The project structure follows clean architecture practices, separating concerns into handler, service, and repository layers.
+This is a backend service written in Go using the Fiber framework. The project structure follows clean architecture practices, separating concerns into handler, service, and repository layers. Welcome to **Okefin-Service**, a Go-based microservice designed as a backend for an e-commerce platform using clean architecture principles.
+
 
 ## 📁 Project Structure
 - \`config/\`: Configuration-related files
