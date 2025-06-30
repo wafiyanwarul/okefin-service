@@ -27,6 +27,25 @@ type KotaResponse struct {
 	Name       string `json:"name"`
 }
 
+type TokoResponse struct {
+	ID       uint   `json:"id"`
+	NamaToko string `json:"nama_toko"`
+	UrlFoto  string `json:"url_foto"`
+}
+
+type RegisterResponse struct {
+	ID           uint              `json:"id"`
+	Nama         string            `json:"nama"`
+	NoTelp       string            `json:"no_telp"`
+	TanggalLahir string            `json:"tanggal_lahir"`
+	Pekerjaan    string            `json:"pekerjaan"`
+	Email        string            `json:"email"`
+	IDProvinsi   *ProvinsiResponse `json:"id_provinsi"`
+	IDKota       *KotaResponse     `json:"id_kota"`
+	IsAdmin      bool              `json:"is_admin"`
+	Toko         *TokoResponse     `json:"toko"`
+}
+
 type LoginResponse struct {
 	Nama         string            `json:"nama"`
 	NoTelp       string            `json:"no_telp"`
